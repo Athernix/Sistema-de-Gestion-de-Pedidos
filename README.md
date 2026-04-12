@@ -9,3 +9,9 @@ en esta debemos fijarnos que estemos dentro de la carpeta del proyecto, llamada 
  
 
 Despues de todo esto vamos a levantar la base de datos, para ello ejecutaremos el siguiente comando en la consola, dentro de la carpeta de backend 
+<code>PS C:\Users\juand\Downloads\proyectoP1> cd backend</code>
+Deberia quedar asi
+<code>PS C:\Users\juand\Downloads\proyectoP1\backend> </code>
+Dentro de esta carpeta vamos a ejecutar el siguiente comando
+<code>pip install -r requirements.txt
+uvicorn main:app --reload --host 0.0.0.0 --port 8000</code>
