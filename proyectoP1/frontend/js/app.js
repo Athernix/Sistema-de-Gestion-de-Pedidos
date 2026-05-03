@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", async() => {
     if (mesaElement) mesaElement.textContent = mesaId;
 
     // 1. Verificar si la mesa ya tiene un pedido activo (Estado de mesa)
-    await verificarEstadoMesa();
+    await verificarEstado(mesaId);
 
     // 2. Cargar los productos
     await cargarMenu();
@@ -20,40 +20,53 @@ document.addEventListener("DOMContentLoaded", async() => {
 
 // --- LÓGICA DE ESTADO Y CARRITO ---
 
-async function verificarEstadoMesa() {
+async function verificarEstado(mesaId) {
     try {
-        const res = await fetch(`${API_BASE}/mesas`);
-        const mesas = await res.json();
-
-        // Buscamos nuestra mesa en la lista que devuelve el backend
-        const miMesa = mesas.find(m => m.mesa == mesaId || m.id == mesaId);
-
-        // Si la mesa está ocupada, recuperamos el carrito existente
-        if (miMesa && (miMesa.estado === "Ocupada" || !miMesa.esta_libre)) {
-            carritoId = miMesa.carrito_activo;
-            console.log("Mesa ocupada. Recuperando carrito ID:", carritoId);
-            actualizarContadorCarrito(carritoId);
-        } else {
-            console.log("Mesa libre. Abriendo carrito nuevo...");
-            await abrirCarrito();
-        }
-    } catch (error) {
-        console.error("Error verificando estado de mesa:", error);
-    }
-}
-
-async function abrirCarrito() {
-    try {
-        const res = await fetch(`${API_BASE}/carrito/${mesaId}`, { method: 'POST' });
+        const res = await fetch(`${API_BASE}/estado_mesa/${mesaId}`);
         const data = await res.json();
 
-        // Guardamos el ID del carrito (manejando si viene como objeto o número)
-        carritoId = data.id_carrito || data;
-        console.log("Carrito activo:", carritoId);
+        console.log("Respuesta backend:", data);
 
-        actualizarContadorCarrito(carritoId);
+        if (data && data.orden) {
+            console.log("Mesa ocupada. Recuperando carrito");
+
+            const carritoPlano = {
+                id_carrito: data.id_carrito,
+                id_mesa: data.id_mesa,
+                orden: data.orden.map(item => {
+                    const esCombo = item.nombre?.toLowerCase().includes("combo");
+
+                    return {
+                        nombre: item.nombre,
+                        cantidad: item.cantidad_total,
+                        subtotal: item.subtotal_total,
+                        ...(esCombo
+                            ? { id_combo: item.id }
+                            : { id_menu: item.id }
+                        )
+                    };
+                })
+            };
+
+            localStorage.setItem("carrito", JSON.stringify(carritoPlano));
+
+        } else {
+            console.log("Mesa libre");
+
+            const carritoVacio = {
+                id_carrito: 0,
+                id_mesa: mesaId,
+                orden: []
+            };
+
+            localStorage.setItem("carrito", JSON.stringify(carritoVacio));
+        }
+
+        // 🔹 DEBUG obligatorio
+        console.log("LocalStorage ahora:", localStorage.getItem("carrito"));
+
     } catch (error) {
-        console.error("Error al abrir carrito:", error);
+        console.error("Error verificando estado de mesa:", error);
     }
 }
 
@@ -65,6 +78,9 @@ async function cargarMenu() {
         const menu = await res.json();
         const contenedor = document.getElementById("lista-menu");
 
+        // 🔹 guardar en localStorage
+        localStorage.setItem("menu", JSON.stringify(menu));
+
         contenedor.innerHTML = menu.map(item => `
             <div class="card">
                 <div>
@@ -72,9 +88,12 @@ async function cargarMenu() {
                     <p>${item.descripcion_ingredientes}</p>
                     <div class="precio">$${item.precio.toLocaleString()}</div>
                 </div>
-                <button class="btn-add" onclick="agregarAlCarrito('menu', ${item.id})">Agregar +</button>
+                <button class="btn-add" onclick="agregarAlCarrito('menu', ${item.id})">
+                    Agregar +
+                </button>
             </div>
         `).join('');
+
     } catch (error) {
         console.error("Error cargando menú:", error);
     }
@@ -86,6 +105,9 @@ async function cargarCombos() {
         const combos = await res.json();
         const contenedor = document.getElementById("lista-combos");
 
+        // 🔹 guardar en localStorage
+        localStorage.setItem("combos", JSON.stringify(combos));
+
         contenedor.innerHTML = combos.map(combo => `
             <div class="card">
                 <div>
@@ -93,9 +115,12 @@ async function cargarCombos() {
                     <p>${combo.descripcion}</p>
                     <div class="precio">$${combo.precio_combo.toLocaleString()}</div>
                 </div>
-                <button class="btn-add" onclick="agregarAlCarrito('combo', ${combo.id})">Agregar +</button>
+                <button class="btn-add" onclick="agregarAlCarrito('combo', ${combo.id})">
+                    Agregar +
+                </button>
             </div>
         `).join('');
+
     } catch (error) {
         console.error("Error cargando combos:", error);
     }
@@ -103,90 +128,91 @@ async function cargarCombos() {
 
 // --- GESTIÓN DE PEDIDOS ---
 
-async function agregarAlCarrito(tipo, idElemento) {
-    if (!carritoId) {
-        alert("Iniciando carrito... intenta de nuevo en un segundo.");
-        await abrirCarrito();
+function agregarAlCarrito(tipo, idElemento, nombre, precio) {
+    // Obtener carrito actual
+    let carrito = JSON.parse(localStorage.getItem("carrito"));
+
+    //Buscar si el producto ya existe
+    const itemExistente = carrito.orden.find(item => {
+        if (tipo === "menu") return item.id_menu === idElemento;
+        if (tipo === "combo") return item.id_combo === idElemento;
+    });
+
+    if (itemExistente) {
+        // 🔹 Si ya existe, aumentamos cantidad
+        itemExistente.cantidad += 1;
+        itemExistente.subtotal += precio;
+    } else {
+        // 🔹 Si no existe, lo agregamos
+        const nuevoItem = {
+            nombre: nombre,
+            cantidad: 1,
+            subtotal: precio,
+            ...(tipo === "menu"
+                ? { id_menu: idElemento }
+                : { id_combo: idElemento }
+            )
+        };
+
+        carrito.orden.push(nuevoItem);
+    }
+
+    // 🔹 Guardar en localStorage
+    localStorage.setItem("carrito", JSON.stringify(carrito));
+
+    // 🔹 Actualizar vista
+    actualizarVistaCarrito();
+}
+
+function actualizarVistaCarrito() {
+    const contenedor = document.getElementById("carrito-items");
+
+    const carrito = JSON.parse(localStorage.getItem("carrito"));
+    const menu = JSON.parse(localStorage.getItem("menu")) || [];
+    const combos = JSON.parse(localStorage.getItem("combos")) || [];
+
+    if (!carrito || !carrito.orden || carrito.orden.length === 0) {
+        contenedor.innerHTML = "<p>Tu pedido está vacío.</p>";
         return;
     }
 
-    const endpoint = tipo === 'menu' ? '/pedido/menu' : '/pedido/combo';
-    const payload = {
-        id_carrito: parseInt(carritoId),
-        cantidad: 1,
-        notas: ""
-    };
+    let total = 0;
 
-    if (tipo === 'menu') payload.id_menu = parseInt(idElemento);
-    if (tipo === 'combo') payload.id_combo = parseInt(idElemento);
+    contenedor.innerHTML = carrito.orden.map(item => {
+        let nombre = "";
+        let precioUnitario = 0;
 
-    try {
-        const res = await fetch(`${API_BASE}${endpoint}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-            alert("¡Agregado con éxito!");
-            // Actualizamos el número del botón verde inmediatamente
-            actualizarContadorCarrito(carritoId);
-        } else {
-            alert("No se pudo agregar el producto.");
-        }
-    } catch (error) {
-        console.error("Error en la petición:", error);
-    }
-}
-
-async function actualizarVistaCarrito() {
-    if (!carritoId) return;
-
-    try {
-        const res = await fetch(`${API_BASE}/carrito/${carritoId}`);
-        const pedidos = await res.json();
-        const contenedor = document.getElementById("carrito-items");
-
-        if (!pedidos || pedidos.length === 0) {
-            contenedor.innerHTML = "<p>Tu comanda está vacía.</p>";
-            return;
+        // 🔹 buscar en MENU
+        if (item.id_menu) {
+            const m = menu.find(x => x.id === item.id_menu);
+            nombre = m?.nombre_platillo || "Producto";
+            precioUnitario = m?.precio || 0;
         }
 
-        let total = 0;
-        contenedor.innerHTML = pedidos.map(p => {
-            total += parseFloat(p.subtotal);
-            // Usamos p.nombre que viene gracias al JOIN en el backend
-            return `
-                <div class="carrito-item">
-                    <span>${p.cantidad}x ${p.nombre}</span> 
-                    <span>$${parseFloat(p.subtotal).toLocaleString()}</span>
-                </div>
-            `;
-        }).join('');
+        // 🔹 buscar en COMBOS
+        if (item.id_combo) {
+            const c = combos.find(x => x.id === item.id_combo);
+            nombre = c?.nombre_combo || "Combo";
+            precioUnitario = c?.precio_combo || 0;
+        }
 
-        contenedor.innerHTML += `
-            <div class="carrito-item total-row">
-                <span>TOTAL:</span>
-                <span>$${total.toLocaleString()}</span>
+        const subtotal = precioUnitario * item.cantidad;
+        total += subtotal;
+
+        return `
+            <div class="carrito-item">
+                <span>${item.cantidad}x ${nombre}</span> 
+                <span>$${subtotal.toLocaleString()}</span>
             </div>
         `;
-    } catch (error) {
-        console.error("Error al obtener detalle del carrito:", error);
-    }
-}
+    }).join('');
 
-function actualizarContadorCarrito(id) {
-    if (!id) return;
-    fetch(`${API_BASE}/carrito/${id}`)
-        .then(res => res.json())
-        .then(data => {
-            const boton = document.querySelector('.btn-carrito');
-            if (boton) {
-                const total = data.reduce((sum, item) => sum + item.cantidad, 0);
-                boton.innerHTML = `🛒 Ver Pedido (${total})`;
-            }
-        })
-        .catch(err => console.error("Error actualizando contador:", err));
+    contenedor.innerHTML += `
+        <div class="carrito-item total-row">
+            <span>TOTAL:</span>
+            <span>$${total.toLocaleString()}</span>
+        </div>
+    `;
 }
 
 // --- UI Y NAVEGACIÓN ---
@@ -205,17 +231,56 @@ function toggleCarrito() {
 
 async function confirmarPedido() {
     if (!confirm("¿Deseas enviar el pedido a cocina?")) return;
+
+    const carrito = JSON.parse(localStorage.getItem("carrito"));
+
+    if (!carrito || !carrito.orden.length) {
+        alert("El carrito está vacío");
+        return;
+    }
+
+    // 🔹 separar menus
+    const menus = carrito.orden
+        .filter(item => item.id_menu)
+        .map(item => ({
+            id_menu: item.id_menu,
+            cantidad: item.cantidad,
+            notas: item.notas || ""
+        }));
+
+    // 🔹 separar combos
+    const combos = carrito.orden
+        .filter(item => item.id_combo)
+        .map(item => ({
+            id_combo: item.id_combo,
+            cantidad: item.cantidad,
+            notas: item.notas || ""
+        }));
+
+    const payload = {
+        id_carrito: carrito.id_carrito,
+        id_mesa: carrito.id_mesa,
+        menus,
+        combos
+    };
+
     try {
-        const res = await fetch(`${API_BASE}/cerrar-pedido`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id_mesa: parseInt(mesaId) })
+        const res = await fetch(`${API_BASE}/load_carrito`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
         });
 
         if (res.ok) {
-            alert("¡Pedido enviado a cocina! La mesa se ha liberado.");
+            alert("¡Pedido enviado a cocina!");
+
+            localStorage.removeItem("carrito");
+
             window.location.reload();
+        } else {
+            alert("Error al enviar el pedido");
         }
+
     } catch (error) {
         console.error("Error al confirmar pedido:", error);
     }

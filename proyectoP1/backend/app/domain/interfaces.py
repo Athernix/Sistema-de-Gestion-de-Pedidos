@@ -11,6 +11,12 @@ class IQuickOrderRepository(ABC):
     def get_mesas(self) -> List[Mesa]: pass
 
     @abstractmethod
+    def get_state_mesa(self, id: int) -> bool: pass
+
+    @abstractmethod
+    def get_last_pedido_by_mesa(self, id: int) -> int: pass
+
+    @abstractmethod
     def get_menu(self) -> List[MenuItem]: pass
 
     @abstractmethod
@@ -26,7 +32,7 @@ class IQuickOrderRepository(ABC):
     def agregar_combo(self, id_carrito: int, id_combo: int, cantidad: int, notas: str) -> None: pass
 
     @abstractmethod
-    def get_carrito(self, id_carrito: int) -> List[Dict[str, Any]]: pass
+    def get_carrito(self, id_carrito: int) -> Dict[str, Any]: pass
 
     @abstractmethod
     def cerrar_mesa(self, id_mesa: int) -> None: pass
