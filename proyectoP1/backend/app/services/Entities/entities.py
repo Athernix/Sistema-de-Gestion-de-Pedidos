@@ -32,16 +32,21 @@ class Combo(BaseModel):
 
 # DTOs para recibir datos (Request Models)
 class AgregarMenuRequest(BaseModel):
-    id_carrito: int
     id_menu: int
     cantidad: int
     notas: Optional[str] = ""
 
 class AgregarComboRequest(BaseModel):
-    id_carrito: int
     id_combo: int
     cantidad: int
     notas: Optional[str] = ""
 
+class AgregarCarrito(BaseModel):
+    id_carrito: int
+    id_mesa: int
+    menus: Optional[List[AgregarMenuRequest]]
+    combos: Optional[List[AgregarComboRequest]]
+
 class CerrarPedidoRequest(BaseModel):
     id_mesa: int
+

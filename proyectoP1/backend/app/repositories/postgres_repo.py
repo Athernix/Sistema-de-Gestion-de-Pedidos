@@ -1,11 +1,11 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Dict, Any
-from ..domain.interfaces import IQuickOrderRepository
-from ..domain.entities import Mesa, MenuItem, Combo
+from . import database
+from ..services.Entities.entities import Mesa, MenuItem, Combo
 
-class PostgresQuickOrderRepository(IQuickOrderRepository):
-    def __init__(self, db_session: Session):
+class PostgresQuickOrderRepository():
+    def __init__(self, db_session):
         self.db = db_session
 
     def get_mesas(self) -> List[Dict[str, Any]]:
@@ -17,13 +17,27 @@ class PostgresQuickOrderRepository(IQuickOrderRepository):
         # Esto garantiza que 'carrito_activo' y 'estado' viajen al frontend.
         return [dict(row) for row in result]
 
+    def get_state_mesa(self, id: int) -> bool:
+        query = text("""SELECT esta_libre FROM mesa WHERE id = :id """)
+
+        result = self.db.execute(query, {"id": id}).scalar()
+
+        return result
+
+    def get_last_pedido_by_mesa(self, id: int) -> int:
+        query = text("""SELECT id FROM carrito WHERE id_mesa = :id ORDER BY id DESC LIMIT 1""")
+
+        result = self.db.execute(query, {"id": id}).scalar()
+
+        return result
+
     def get_menu(self) -> List[MenuItem]:
-        query = text("SELECT id, nombre_platillo, precio, descripcion_ingredientes, categoria, disponible FROM menu;")
+        query = text("SELECT * FROM menu;")
         result = self.db.execute(query).mappings().all()
         return [MenuItem(**row) for row in result]
 
     def get_combos(self) -> List[Combo]:
-        query = text("SELECT id, nombre_combo, id_platillo, id_acompanamiento, id_bebida, precio_combo, descripcion, disponible FROM combo;")
+        query = text("SELECT * FROM combo;")
         result = self.db.execute(query).mappings().all()
         return [Combo(**row) for row in result]
 
@@ -74,14 +88,17 @@ class PostgresQuickOrderRepository(IQuickOrderRepository):
         # JOIN vital para mostrar nombres en lugar de IDs
         query = text("""
             SELECT 
-                p.cantidad, 
-                p.subtotal, 
-                p.notas,
-                COALESCE(m.nombre_platillo, c.nombre_combo) as nombre
+                COALESCE(m.nombre_platillo, c.nombre_combo) AS nombre,
+                COALESCE(m.id, c.id) AS id,
+                SUM(p.cantidad) AS cantidad_total,
+                SUM(p.subtotal) AS subtotal_total
             FROM pedidos p
             LEFT JOIN menu m ON p.id_menu = m.id
             LEFT JOIN combo c ON p.id_combo = c.id
             WHERE p.id_carrito = CAST(:carrito AS INTEGER)
+            GROUP BY 
+                COALESCE(m.nombre_platillo, c.nombre_combo),
+                COALESCE(m.id, c.id)
         """)
         result = self.db.execute(query, {"carrito": int(id_carrito)}).mappings().all()
         return [dict(row) for row in result]

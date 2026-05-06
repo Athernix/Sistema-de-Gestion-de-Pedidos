@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import router
+from app.routes.routes import router
 
 app = FastAPI(
     title="QuickOrder API",
@@ -8,7 +8,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Habilitar CORS - Esto soluciona el error de "blocked by CORS policy" que vimos en F12
+# Habilitar CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
