@@ -1,11 +1,11 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Dict, Any
-from ..domain.interfaces import IQuickOrderRepository
-from ..domain.entities import Mesa, MenuItem, Combo
+from . import database
+from ..services.Entities.entities import Mesa, MenuItem, Combo
 
-class PostgresQuickOrderRepository(IQuickOrderRepository):
-    def __init__(self, db_session: Session):
+class PostgresQuickOrderRepository():
+    def __init__(self, db_session):
         self.db = db_session
 
     def get_mesas(self) -> List[Dict[str, Any]]:

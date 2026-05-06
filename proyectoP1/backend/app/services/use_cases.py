@@ -1,10 +1,11 @@
 from typing import List, Dict, Any, Optional
-from ..domain.interfaces import IQuickOrderRepository
-from ..domain.entities import Mesa, MenuItem, Combo, AgregarMenuRequest, AgregarComboRequest
+from ..repositories.postgres_repo import PostgresQuickOrderRepository
+from .Entities.entities import Mesa, MenuItem, Combo, AgregarMenuRequest, AgregarComboRequest
 
+  
 class QuickOrderUseCases:
-    def __init__(self, repository: IQuickOrderRepository):
-        self.repo = repository
+    def __init__(self, repo):
+        self.repo = repo
 
     def obtener_catalogo_mesas(self) -> List[Mesa]:
         return self.repo.get_mesas()
