@@ -4,7 +4,7 @@ from app.routes.routes import router
 
 app = FastAPI(
     title="QuickOrder API",
-    description="Sistema de Gestión de Pedidos con Clean Architecture",
+    description="Sistema de Gestión de Pedidos Arquitectura por capas",
     version="1.0.0"
 )
 
